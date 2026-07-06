@@ -5,42 +5,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
 
-# ===== FUNGSI UNTUK PERINTAH =====
-async def start(update, context):
-    await update.message.reply_text(
-        "Halo! 👋 Kirimkan link TikTok, nanti aku downloadin buat kamu.\n\n"
-        "Gunakan /cancel untuk membatalkan proses."
-    )
-
-async def help_command(update, context):
-    await update.message.reply_text(
-        "📌 Cara pakai:\n"
-        "1. Kirim link TikTok\n"
-        "2. Pilih format (video/audio)\n"
-        "3. Tunggu proses selesai\n\n"
-        "Perintah yang tersedia:\n"
-        "/start - Mulai\n"
-        "/help - Bantuan\n"
-        "/cancel - Batalkan proses"
-    )
-
-async def cancel(update, context):
-    # Hapus data user dari memory (kalau pakai dictionary)
-    user_id = update.effective_user.id
-    if user_id in user_data:  # Kalau kamu pakai user_data
-        user_data.pop(user_id, None)
-    await update.message.reply_text("✅ Proses dibatalkan. Kirim link baru kapan saja!")
-
-# ===== DAFTARKAN HANDLER =====
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("cancel", cancel))
-
+# ===== KONFIGURASI =====
 BOT_TOKEN = "8622998116:AAH2PKKBuiXJFCp48-ny577B32OJuJQ4OXQ"  # Ganti dengan token asli
 DOWNLOAD_DIR = "downloads"
 
 Path(DOWNLOAD_DIR).mkdir(exist_ok=True)
 
+# ===== FUNGSI DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
     patterns = {
         "youtube": r"(youtube\.com|youtu\.be)",
@@ -54,45 +25,32 @@ def detect_platform(url: str) -> str:
             return platform
     return "unknown"
 
+# ===== FUNGSI DOWNLOAD =====
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     
-    # Konfigurasi default yt-dlp
     ydl_opts = {
-        'outtmpl': output_template,  # <-- perbaiki: outtmpl (bukan outtmp1)
+        'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        'cookiefile': 'cookies.txt'  # <-- pakai cookies
+        'cookiefile': 'cookies.txt'
     }
     
-    # Pengaturan khusus per platform
     if platform == "youtube":
         ydl_opts['format'] = 'best[height<=720]/best'
-    elif platform == "tiktok":
-        ydl_opts['format'] = 'best'
-    elif platform == "instagram":
-        ydl_opts['format'] = 'best'
-    elif platform == "facebook":
-        ydl_opts['format'] = 'best'
-    elif platform == "threads":
+    else:
         ydl_opts['format'] = 'best'
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info dulu (tanpa download)
-            info = ydl.extract_info(url, download=False)  # <-- perbaiki: download=False
-            
-            # Dapatkan judul dan thumbnail
+            info = ydl.extract_info(url, download=False)
             title = info.get('title', 'video')[:50]
             thumbnail = info.get('thumbnail', None)
             duration = info.get('duration', 0)
             
-            # Lakukan download
-            print(f"Downloading: {title}")
             ydl.download([url])
             
-            # Cari file hasil download
             downloaded_file = None
             for file in os.listdir(DOWNLOAD_DIR):
                 if file.endswith(('.mp4', '.webm', '.mkv', '.mp3')):
@@ -121,16 +79,29 @@ async def download_media(url: str, platform: str) -> dict:
             'error': str(e)
         }
 
-def format_duration(seconds: int) -> str:
-    if not seconds:
-        return "N/A"
-    minutes = seconds // 60
-    secs = seconds % 60
-    return f"{minutes}:{secs:02d}"
-
+# ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎬 Kirim link YouTube/TikTok/IG/FB/Threads untuk download!")
+    await update.message.reply_text(
+        "🎬 Halo! Kirim link YouTube/TikTok/IG/FB/Threads untuk aku downloadkan.\n\n"
+        "Gunakan /cancel untuk membatalkan proses."
+    )
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📌 Cara pakai:\n"
+        "1. Kirim link video\n"
+        "2. Tunggu proses download\n"
+        "3. Klik tombol Download\n\n"
+        "Perintah:\n"
+        "/start - Mulai\n"
+        "/help - Bantuan\n"
+        "/cancel - Batalkan"
+    )
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Proses dibatalkan. Kirim link baru kapan saja!")
+
+# ===== HANDLER URL =====
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
     
@@ -159,6 +130,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await status_msg.delete()
     await update.message.reply_text(info_text, reply_markup=reply_markup)
 
+# ===== HANDLER TOMBOL =====
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -177,17 +149,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         os.remove(file_path)
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/start - Mulai\n/help - Bantuan")
-
+# ===== MAIN =====
 def main():
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         print("❌ Ganti BOT_TOKEN dulu!")
         return
     
     app = Application.builder().token(BOT_TOKEN).build()
+    
+    # Daftarkan semua handler
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     app.add_handler(CallbackQueryHandler(button_callback))
     
