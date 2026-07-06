@@ -157,7 +157,7 @@ def main():
         print("❌ BOT_TOKEN tidak ditemukan! Set di Environment Variables Railway.")
         return
     
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).read_timeout(30).write_timeout(30).build()
     
     # Daftarkan semua handler
     app.add_handler(CommandHandler("start", start))
