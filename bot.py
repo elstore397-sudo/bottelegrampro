@@ -135,7 +135,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Proses dibatalkan. Kirim link baru kapan saja!")
 
 # ===== MANAJEMEN USER (Hanya Owner) =====
-OWNER_CHAT_ID = 123456789  # Ganti dengan chat_id kamu!
+OWNER_CHAT_ID = 6096236749  # Ganti dengan chat_id kamu!
 
 async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_CHAT_ID:
