@@ -3,3 +3,4 @@ requests
 beautifulsoup4
 yt-dlp
 python-dotenv
+ffmpeg-static
