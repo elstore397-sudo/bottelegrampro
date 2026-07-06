@@ -36,7 +36,8 @@ async def download_media(url: str, platform: str) -> dict:
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        'cookiefile': 'cookies.txt'
+        'cookiefile': 'cookies.txt',
+        'impersonate': 'chrome-131',
     }
     if platform == "youtube":
         ydl_opts['format'] = 'best[height<=720]/best'
