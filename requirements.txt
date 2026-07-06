@@ -4,3 +4,4 @@ beautifulsoup4
 yt-dlp
 python-dotenv
 ffmpeg-static
+yt-dlp>=2026.1.31
