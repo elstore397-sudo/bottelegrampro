@@ -103,8 +103,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         await update.message.reply_text("⛔ Maaf, bot ini hanya untuk pembeli yang terdaftar.\nHubungi @seeshoopsolution untuk aktivasi.")
         return
-
-    await update.message.reply_text(f"123456789: {update.effective_user.id}")
     
     await update.message.reply_text(
         "🎬 Halo! Kirim link YouTube/TikTok/IG/FB/Threads untuk aku downloadkan.\n\n"
