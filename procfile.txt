@@ -1,1 +1,1 @@
-worker: bash ffmpeg-install.sh && python bot.py
+worker: bash ffmpeg-install.sh && python -m bgutil_ytdlp_pot_provider.server & python bot.py
