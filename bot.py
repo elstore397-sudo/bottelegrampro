@@ -164,14 +164,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(f"📤 Mengirim {'audio' if is_audio else 'video'}...")
     
-    try:
-        if is_audio:
+    try:        
+    if is_audio:
     # Konversi ke MP3
     audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
     
     # Cek apakah file audio sudah ada
     if os.path.exists(audio_path):
-        os.remove(audio_path)  # Hapus jika sudah ada biar fresh
+        os.remove(audio_path)
     
     ydl_opts_audio = {
         'outtmpl': audio_path,
