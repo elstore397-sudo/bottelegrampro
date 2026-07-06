@@ -1,12 +1,40 @@
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    bot.reply_to(message, "Halo! Kirimkan link TikTok, nanti aku downloadin buat kamu. 😊")
 import os
 import re
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
+
+# ===== FUNGSI UNTUK PERINTAH =====
+async def start(update, context):
+    await update.message.reply_text(
+        "Halo! 👋 Kirimkan link TikTok, nanti aku downloadin buat kamu.\n\n"
+        "Gunakan /cancel untuk membatalkan proses."
+    )
+
+async def help_command(update, context):
+    await update.message.reply_text(
+        "📌 Cara pakai:\n"
+        "1. Kirim link TikTok\n"
+        "2. Pilih format (video/audio)\n"
+        "3. Tunggu proses selesai\n\n"
+        "Perintah yang tersedia:\n"
+        "/start - Mulai\n"
+        "/help - Bantuan\n"
+        "/cancel - Batalkan proses"
+    )
+
+async def cancel(update, context):
+    # Hapus data user dari memory (kalau pakai dictionary)
+    user_id = update.effective_user.id
+    if user_id in user_data:  # Kalau kamu pakai user_data
+        user_data.pop(user_id, None)
+    await update.message.reply_text("✅ Proses dibatalkan. Kirim link baru kapan saja!")
+
+# ===== DAFTARKAN HANDLER =====
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("cancel", cancel))
 
 BOT_TOKEN = "8622998116:AAH2PKKBuiXJFCp48-ny577B32OJuJQ4OXQ"  # Ganti dengan token asli
 DOWNLOAD_DIR = "downloads"
