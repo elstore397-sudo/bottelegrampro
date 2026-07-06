@@ -151,7 +151,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== MAIN =====
 def main():
-    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    if BOT_TOKEN == 8622998116:AAH2PKKBuiXJFCp48-ny577B32OJuJQ4OXQ:
         print("❌ Ganti BOT_TOKEN dulu!")
         return
     
