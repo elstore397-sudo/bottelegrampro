@@ -163,30 +163,42 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         if is_audio:
-            # Konversi ke MP3
-            audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
-            ydl_opts_audio = {
-                'outtmpl': audio_path,
-                'quiet': True,
-                'no_warnings': True,
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-                'cookiefile': 'cookies.txt'
-            }
-            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
-                ydl.download([url])
-            
-            with open(audio_path, 'rb') as f:
-                await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
-            os.remove(audio_path)
-        else:
-            with open(file_path, 'rb') as f:
-                await query.message.reply_video(video=f, caption="🎬 Video selesai!")
-            os.remove(file_path)
+    # Konversi ke MP3
+    audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
+    
+    # Cek apakah file audio sudah ada
+    if os.path.exists(audio_path):
+        os.remove(audio_path)  # Hapus jika sudah ada biar fresh
+    
+    ydl_opts_audio = {
+        'outtmpl': audio_path,
+        'quiet': True,
+        'no_warnings': True,
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'cookiefile': 'cookies.txt'
+    }
+    with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+        ydl.download([url])
+    
+    # Cek apakah file audio berhasil dibuat
+    if not os.path.exists(audio_path):
+        await query.edit_message_text("❌ Gagal mengkonversi audio. Coba lagi nanti.")
+        return
+    
+    with open(audio_path, 'rb') as f:
+        await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
+    os.remove(audio_path)
+    
+else:
+    # Kirim video
+    with open(file_path, 'rb') as f:
+        await query.message.reply_video(video=f, caption="🎬 Video selesai!")
+    os.remove(file_path)
         
         downloads_cache.pop(file_id, None)
     except Exception as e:
