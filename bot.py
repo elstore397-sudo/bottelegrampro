@@ -1,4 +1,5 @@
 import os
+import base64
 import re
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -122,13 +123,16 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
         return
     
-    keyboard = [[InlineKeyboardButton("📥 Download", callback_data=f"dl|{result['file_path']}")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}"
-    
-    await status_msg.delete()
-    await update.message.reply_text(info_text, reply_markup=reply_markup)
+    # Encode file_path ke base64 (aman untuk callback_data)
+file_path_encoded = base64.b64encode(result['file_path'].encode()).decode()
+
+keyboard = [[InlineKeyboardButton("📥 Download", callback_data=f"dl|{file_path_encoded}")]]
+reply_markup = InlineKeyboardMarkup(keyboard)
+
+info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}"
+
+await status_msg.delete()
+await update.message.reply_text(info_text, reply_markup=reply_markup)
 
 # ===== HANDLER TOMBOL =====
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,7 +140,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data.startswith("dl|"):
-        file_path = query.data.split("|", 1)[1]
+        # Decode file_path dari base64
+        file_path_encoded = query.data.split("|", 1)[1]
+        file_path = base64.b64decode(file_path_encoded.encode()).decode()
         
         if not os.path.exists(file_path):
             await query.edit_message_text("❌ File tidak tersedia.")
