@@ -8,10 +8,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import yt_dlp
 
 # ===== KONFIGURASI =====
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Ambil dari Environment Variable Railway
 DOWNLOAD_DIR = "downloads"
 Path(DOWNLOAD_DIR).mkdir(exist_ok=True)
 
+# Cache untuk menyimpan file sementara
 downloads_cache = {}
 
 # ===== DETEKSI PLATFORM =====
@@ -28,19 +29,21 @@ def detect_platform(url: str) -> str:
             return platform
     return "unknown"
 
-# ===== DOWNLOAD MEDIA =====
+# ===== FUNGSI DOWNLOAD =====
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
+    
     ydl_opts = {
-    'outtmpl': output_template,
-    'quiet': True,
-    'no_warnings': True,
-    'extract_flat': False,
-    'cookiefile': 'cookies.txt',
-    'headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'outtmpl': output_template,
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'cookiefile': 'cookies.txt',
+        'headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
     }
-    }
+    
     if platform == "youtube":
         ydl_opts['format'] = 'best[height<=720]/best'
     else:
@@ -52,6 +55,7 @@ async def download_media(url: str, platform: str) -> dict:
             title = info.get('title', 'video')[:50]
             thumbnail = info.get('thumbnail', None)
             duration = info.get('duration', 0)
+            
             ydl.download([url])
             
             downloaded_file = None
@@ -60,6 +64,7 @@ async def download_media(url: str, platform: str) -> dict:
                     if title in file or any(word in file.lower() for word in title.lower().split()[:5]):
                         downloaded_file = os.path.join(DOWNLOAD_DIR, file)
                         break
+            
             if not downloaded_file:
                 files = [os.path.join(DOWNLOAD_DIR, f) for f in os.listdir(DOWNLOAD_DIR) 
                         if f.endswith(('.mp4', '.webm', '.mkv', '.mp3'))]
@@ -74,8 +79,12 @@ async def download_media(url: str, platform: str) -> dict:
                 'duration': duration,
                 'platform': platform
             }
+            
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 # ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -102,21 +111,25 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== HANDLER URL =====
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
+    
     if not re.match(r'https?://', url):
         await update.message.reply_text("❌ Kirimkan link URL yang valid!")
         return
+    
     platform = detect_platform(url)
     if platform == "unknown":
         await update.message.reply_text("❌ Platform tidak didukung!")
         return
     
     status_msg = await update.message.reply_text(f"📥 Memproses link dari {platform.upper()}...")
+    
     result = await download_media(url, platform)
     
     if not result['success']:
         await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
         return
     
+    # Simpan ke cache dengan ID unik
     file_id = int(time.time() * 1000) + random.randint(1, 999)
     downloads_cache[file_id] = {
         'file_path': result['file_path'],
@@ -134,6 +147,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}\n\nPilih format yang diinginkan:"
+    
     await status_msg.delete()
     await update.message.reply_text(info_text, reply_markup=reply_markup)
 
@@ -164,46 +178,45 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(f"📤 Mengirim {'audio' if is_audio else 'video'}...")
     
-    try:        
-    if is_audio:
-    # Konversi ke MP3
-    audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
-    
-    # Cek apakah file audio sudah ada
-    if os.path.exists(audio_path):
-        os.remove(audio_path)
-    
-    ydl_opts_audio = {
-        'outtmpl': audio_path,
-        'quiet': True,
-        'no_warnings': True,
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'cookiefile': 'cookies.txt'
-    }
-    with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
-        ydl.download([url])
-    
-    # Cek apakah file audio berhasil dibuat
-    if not os.path.exists(audio_path):
-        await query.edit_message_text("❌ Gagal mengkonversi audio. Coba lagi nanti.")
-        return
-    
-    with open(audio_path, 'rb') as f:
-        await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
-    os.remove(audio_path)
-    
-else:
-    # Kirim video
-    with open(file_path, 'rb') as f:
-        await query.message.reply_video(video=f, caption="🎬 Video selesai!")
-    os.remove(file_path)
+    try:
+        if is_audio:
+            # Konversi ke MP3
+            audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
+            
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            
+            ydl_opts_audio = {
+                'outtmpl': audio_path,
+                'quiet': True,
+                'no_warnings': True,
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'cookiefile': 'cookies.txt'
+            }
+            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+                ydl.download([url])
+            
+            if not os.path.exists(audio_path):
+                await query.edit_message_text("❌ Gagal mengkonversi audio. Coba lagi nanti.")
+                return
+            
+            with open(audio_path, 'rb') as f:
+                await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
+            os.remove(audio_path)
+            
+        else:
+            # Kirim video
+            with open(file_path, 'rb') as f:
+                await query.message.reply_video(video=f, caption="🎬 Video selesai!")
+            os.remove(file_path)
         
         downloads_cache.pop(file_id, None)
+        
     except Exception as e:
         await query.edit_message_text(f"❌ Gagal mengirim file: {str(e)}")
 
@@ -212,12 +225,15 @@ def main():
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN tidak ditemukan! Set di Environment Variables Railway.")
         return
+    
     app = Application.builder().token(BOT_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     app.add_handler(CallbackQueryHandler(button_callback))
+    
     print("🤖 Bot berjalan...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
