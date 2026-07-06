@@ -1,3 +1,6 @@
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "Halo! Kirimkan link TikTok, nanti aku downloadin buat kamu. 😊")
 import os
 import re
 from pathlib import Path
