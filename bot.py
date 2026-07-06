@@ -148,11 +148,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_video(video=f, caption="✅ Selesai!")
         
         os.remove(file_path)
-
 # ===== MAIN =====
 def main():
-    if BOT_TOKEN == 8622998116:AAH2PKKBuiXJFCp48-ny577B32OJuJQ4OXQ:
-        print("❌ Ganti BOT_TOKEN dulu!")
+    # Ambil token dari Environment Variable (Railway)
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    
+    if not BOT_TOKEN:
+        print("❌ BOT_TOKEN tidak ditemukan! Set di Environment Variables Railway.")
         return
     
     app = Application.builder().token(BOT_TOKEN).build()
