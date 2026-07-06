@@ -1,16 +1,20 @@
 import os
-import base64
 import re
+import time
+import random
+import base64
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
 
 # ===== KONFIGURASI =====
-BOT_TOKEN = "8622998116:AAH2PKKBuiXJFCp48-ny577B32OJuJQ4OXQ"  # Ganti dengan token asli
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Ambil dari Environment Variable Railway
 DOWNLOAD_DIR = "downloads"
-
 Path(DOWNLOAD_DIR).mkdir(exist_ok=True)
+
+# Cache untuk menyimpan file sementara (biar callback_data cuma ID angka)
+downloads_cache = {}
 
 # ===== FUNGSI DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
@@ -81,6 +85,7 @@ async def download_media(url: str, platform: str) -> dict:
         }
 
 # ===== HANDLER PERINTAH =====
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🎬 Halo! Kirim link YouTube/TikTok/IG/FB/Threads untuk aku downloadkan.\n\n"
@@ -123,47 +128,55 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
         return
     
-    # ===== INI BAGIAN YANG BENAR =====
-    # Encode file_path ke base64
-    file_path_encoded = base64.b64encode(result['file_path'].encode()).decode()
+    # ==== TOMBOL DOWNLOAD DENGAN CACHE ID ====
+    # Buat ID unik (pakai timestamp + random)
+    file_id = int(time.time() * 1000) + random.randint(1, 999)
+    downloads_cache[file_id] = result['file_path']
     
-    keyboard = [[InlineKeyboardButton("📥 Download", callback_data=f"dl|{file_path_encoded}")]]
+    keyboard = [[InlineKeyboardButton("📥 Download", callback_data=f"dl_{file_id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}"
     
-    await status_msg.delete()  # <-- INI HARUS ADA DI DALAM FUNGSI handle_url
+    await status_msg.delete()
     await update.message.reply_text(info_text, reply_markup=reply_markup)
+
 # ===== HANDLER TOMBOL =====
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if query.data.startswith("dl|"):
-        # Decode file_path dari base64
-        file_path_encoded = query.data.split("|", 1)[1]
-        file_path = base64.b64decode(file_path_encoded.encode()).decode()
+    if query.data.startswith("dl_"):
+        # Ambil ID dari callback_data
+        try:
+            file_id = int(query.data.split("_")[1])
+        except (IndexError, ValueError):
+            await query.edit_message_text("❌ ID tidak valid.")
+            return
         
-        if not os.path.exists(file_path):
-            await query.edit_message_text("❌ File tidak tersedia.")
+        file_path = downloads_cache.get(file_id)
+        
+        if not file_path or not os.path.exists(file_path):
+            await query.edit_message_text("❌ File tidak tersedia atau sudah kadaluarsa.")
             return
         
         await query.edit_message_text("📤 Mengirim file...")
         
-        with open(file_path, 'rb') as f:
-            await query.message.reply_video(video=f, caption="✅ Selesai!")
-        
-        os.remove(file_path)
+        try:
+            with open(file_path, 'rb') as f:
+                await query.message.reply_video(video=f, caption="✅ Selesai!")
+            os.remove(file_path)
+            downloads_cache.pop(file_id, None)
+        except Exception as e:
+            await query.edit_message_text(f"❌ Gagal mengirim file: {str(e)}")
+
 # ===== MAIN =====
 def main():
-    # Ambil token dari Environment Variable (Railway)
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
-    
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN tidak ditemukan! Set di Environment Variables Railway.")
         return
     
-    app = Application.builder().token(BOT_TOKEN).read_timeout(30).write_timeout(30).build()
+    app = Application.builder().token(BOT_TOKEN).build()
     
     # Daftarkan semua handler
     app.add_handler(CommandHandler("start", start))
