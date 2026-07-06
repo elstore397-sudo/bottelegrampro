@@ -3,4 +3,4 @@ requests
 beautifulsoup4
 yt-dlp
 python-dotenv
-yt-dlp>=2026.1.31
+yt-dlp>=2026.7.4
