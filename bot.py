@@ -123,17 +123,17 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
         return
     
-    # Encode file_path ke base64 (aman untuk callback_data)
-file_path_encoded = base64.b64encode(result['file_path'].encode()).decode()
-
-keyboard = [[InlineKeyboardButton("📥 Download", callback_data=f"dl|{file_path_encoded}")]]
-reply_markup = InlineKeyboardMarkup(keyboard)
-
-info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}"
-
-await status_msg.delete()
-await update.message.reply_text(info_text, reply_markup=reply_markup)
-
+    # ===== INI BAGIAN YANG BENAR =====
+    # Encode file_path ke base64
+    file_path_encoded = base64.b64encode(result['file_path'].encode()).decode()
+    
+    keyboard = [[InlineKeyboardButton("📥 Download", callback_data=f"dl|{file_path_encoded}")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}"
+    
+    await status_msg.delete()  # <-- INI HARUS ADA DI DALAM FUNGSI handle_url
+    await update.message.reply_text(info_text, reply_markup=reply_markup)
 # ===== HANDLER TOMBOL =====
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
