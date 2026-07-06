@@ -8,12 +8,24 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 import yt_dlp
 
 # ===== KONFIGURASI =====
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Ambil dari Environment Variable Railway
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 DOWNLOAD_DIR = "downloads"
 Path(DOWNLOAD_DIR).mkdir(exist_ok=True)
 
 # Cache untuk menyimpan file sementara
 downloads_cache = {}
+
+# ===== WHITELIST =====
+def load_allowed_users():
+    """Baca daftar chat_id dari file txt"""
+    try:
+        with open('allowed_users.txt', 'r') as f:
+            return [int(line.strip()) for line in f if line.strip().isdigit()]
+    except FileNotFoundError:
+        return []
+
+def is_allowed(update: Update) -> bool:
+    return update.effective_user.id in load_allowed_users()
 
 # ===== DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
@@ -88,12 +100,20 @@ async def download_media(url: str, platform: str) -> dict:
 
 # ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        await update.message.reply_text("⛔ Maaf, bot ini hanya untuk pembeli yang terdaftar.\nHubungi @seeshoopsolution untuk aktivasi.")
+        return
+    
     await update.message.reply_text(
         "🎬 Halo! Kirim link YouTube/TikTok/IG/FB/Threads untuk aku downloadkan.\n\n"
         "Gunakan /cancel untuk membatalkan proses."
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        await update.message.reply_text("⛔ Akses ditolak.")
+        return
+    
     await update.message.reply_text(
         "📌 Cara pakai:\n"
         "1. Kirim link video\n"
@@ -106,10 +126,64 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        await update.message.reply_text("⛔ Akses ditolak.")
+        return
+    
     await update.message.reply_text("✅ Proses dibatalkan. Kirim link baru kapan saja!")
+
+# ===== MANAJEMEN USER (Hanya Owner) =====
+OWNER_CHAT_ID = 123456789  # Ganti dengan chat_id kamu!
+
+async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_CHAT_ID:
+        await update.message.reply_text("⛔ Hanya owner yang bisa menambah user.")
+        return
+    
+    try:
+        new_id = int(context.args[0])
+        with open('allowed_users.txt', 'a') as f:
+            f.write(f"{new_id}\n")
+        await update.message.reply_text(f"✅ User {new_id} berhasil ditambahkan!")
+    except (IndexError, ValueError):
+        await update.message.reply_text("❌ Gunakan: /adduser 123456789")
+
+async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_CHAT_ID:
+        await update.message.reply_text("⛔ Hanya owner yang bisa menghapus user.")
+        return
+    
+    try:
+        remove_id = int(context.args[0])
+        with open('allowed_users.txt', 'r') as f:
+            lines = f.readlines()
+        with open('allowed_users.txt', 'w') as f:
+            for line in lines:
+                if int(line.strip()) != remove_id:
+                    f.write(line)
+        await update.message.reply_text(f"✅ User {remove_id} berhasil dihapus!")
+    except (IndexError, ValueError):
+        await update.message.reply_text("❌ Gunakan: /removeuser 123456789")
+
+async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_CHAT_ID:
+        await update.message.reply_text("⛔ Hanya owner yang bisa melihat daftar user.")
+        return
+    
+    users = load_allowed_users()
+    if not users:
+        await update.message.reply_text("📭 Belum ada user terdaftar.")
+        return
+    
+    user_list = "\n".join([str(u) for u in users])
+    await update.message.reply_text(f"📋 Daftar user terdaftar:\n{user_list}")
 
 # ===== HANDLER URL =====
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        await update.message.reply_text("⛔ Akses ditolak.")
+        return
+    
     url = update.message.text.strip()
     
     if not re.match(r'https?://', url):
@@ -129,7 +203,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
         return
     
-    # Simpan ke cache dengan ID unik
     file_id = int(time.time() * 1000) + random.randint(1, 999)
     downloads_cache[file_id] = {
         'file_path': result['file_path'],
@@ -153,6 +226,10 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== HANDLER TOMBOL =====
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        await update.message.reply_text("⛔ Akses ditolak.")
+        return
+    
     query = update.callback_query
     await query.answer()
     
@@ -180,21 +257,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         if is_audio:
-            # ==== KONVERSI AUDIO ====
-            # Cek apakah file video masih ada
             if not os.path.exists(file_path):
-                await query.edit_message_text("❌ File video tidak ditemukan. Silakan kirim ulang link.")
+                await query.edit_message_text("❌ File video tidak ditemukan.")
                 downloads_cache.pop(file_id, None)
                 return
             
-            # Buat path audio
             audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
             
-            # Hapus file audio lama jika ada
             if os.path.exists(audio_path):
                 os.remove(audio_path)
             
-            # Opsi konversi audio
             ydl_opts_audio = {
                 'outtmpl': audio_path,
                 'quiet': False,
@@ -208,29 +280,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'cookiefile': 'cookies.txt'
             }
             
-            # Download dan konversi
             with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
                 ydl.download([url])
             
-            # Cari file audio yang dihasilkan
             if not os.path.exists(audio_path):
-                # Coba cari file dengan ekstensi .mp3
                 mp3_files = [f for f in os.listdir(DOWNLOAD_DIR) if f.endswith('.mp3')]
                 if mp3_files:
-                    # Ambil file mp3 terbaru
                     mp3_files.sort(key=lambda x: os.path.getctime(os.path.join(DOWNLOAD_DIR, x)), reverse=True)
                     audio_path = os.path.join(DOWNLOAD_DIR, mp3_files[0])
                 else:
-                    await query.edit_message_text("❌ Gagal mengkonversi audio. File MP3 tidak ditemukan.")
+                    await query.edit_message_text("❌ Gagal mengkonversi audio.")
                     return
             
-            # Kirim audio
             with open(audio_path, 'rb') as f:
                 await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
             os.remove(audio_path)
             
         else:
-            # ==== KIRIM VIDEO ====
             if not os.path.exists(file_path):
                 await query.edit_message_text("❌ File video tidak ditemukan.")
                 downloads_cache.pop(file_id, None)
@@ -240,7 +306,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_video(video=f, caption="🎬 Video selesai!")
             os.remove(file_path)
         
-        # Hapus dari cache
         downloads_cache.pop(file_id, None)
         
     except Exception as e:
@@ -257,6 +322,9 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("adduser", add_user))
+    app.add_handler(CommandHandler("removeuser", remove_user))
+    app.add_handler(CommandHandler("listusers", list_users))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
     app.add_handler(CallbackQueryHandler(button_callback))
     
