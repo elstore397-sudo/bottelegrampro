@@ -48,6 +48,7 @@ def detect_platform(url: str) -> str:
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     
+    # Opsi dasar untuk semua platform
     ydl_opts = {
         'outtmpl': output_template,
         'quiet': True,
@@ -59,34 +60,28 @@ async def download_media(url: str, platform: str) -> dict:
         }
     }
     
-    # ===== FORMAT YANG PALING FLEKSIBEL =====
+    # ===== STRATEGI KHUSUS UNTUK YOUTUBE =====
     if platform == "youtube":
-        # Download format terbaik yang tersedia, lalu konversi ke mp4
-        ydl_opts['format'] = 'bestvideo+bestaudio/best'
-        ydl_opts['merge_output_format'] = 'mp4'  # Gabungkan jadi mp4
+        # 1. Gunakan format 'best' yang paling sederhana
+        ydl_opts['format'] = 'best'
+        # 2. Skip format DASH dan HLS yang sering bermasalah
+        ydl_opts['extractor_args'] = {
+            'youtube': {
+                'skip': ['hls', 'dash']
+            }
+        }
     else:
         ydl_opts['format'] = 'best'
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract info dulu untuk dapat judul
             info = ydl.extract_info(url, download=False)
-            
-            # ===== DEBUG: CETAK DAFTAR FORMAT =====
-            print(f"📋 DAFTAR FORMAT UNTUK: {url}")
-            for f in info.get('formats', []):
-                format_id = f.get('format_id', 'N/A')
-                ext = f.get('ext', 'N/A')
-                height = f.get('height', 'N/A')
-                filesize = f.get('filesize', 'N/A')
-                print(f"  ID: {format_id}, Ext: {ext}, Height: {height}, Size: {filesize}")
-            print("=" * 50)
-            # =====================================
-            
             title = info.get('title', 'video')[:50]
             thumbnail = info.get('thumbnail', None)
             duration = info.get('duration', 0)
             
-            # Download (akan otomatis di-merge ke mp4)
+            # Lakukan download
             ydl.download([url])
             
             # Cari file hasil download
@@ -116,7 +111,7 @@ async def download_media(url: str, platform: str) -> dict:
         return {
             'success': False,
             'error': str(e)
-                }
+        }
 
 # ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
