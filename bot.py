@@ -60,30 +60,30 @@ async def download_media(url: str, platform: str) -> dict:
     }
     
     if platform == "youtube":
-        ydl_opts['format'] = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        ydl_opts['format'] = '22/18/best'
     else:
         ydl_opts['format'] = 'best'
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-    info = ydl.extract_info(url, download=False)
-    
-    # ===== DEBUG: CETAK DAFTAR FORMAT =====
-    print(f"📋 DAFTAR FORMAT UNTUK: {url}")
-    for f in info.get('formats', []):
-        format_id = f.get('format_id', 'N/A')
-        ext = f.get('ext', 'N/A')
-        height = f.get('height', 'N/A')
-        filesize = f.get('filesize', 'N/A')
-        print(f"  ID: {format_id}, Ext: {ext}, Height: {height}, Size: {filesize}")
-    print("=" * 50)
-    # =====================================
-    
-    title = info.get('title', 'video')[:50]
-    thumbnail = info.get('thumbnail', None)
-    duration = info.get('duration', 0)
-    
-    ydl.download([url])
+            info = ydl.extract_info(url, download=False)
+            
+            # ===== DEBUG: CETAK DAFTAR FORMAT =====
+            print(f"📋 DAFTAR FORMAT UNTUK: {url}")
+            for f in info.get('formats', []):
+                format_id = f.get('format_id', 'N/A')
+                ext = f.get('ext', 'N/A')
+                height = f.get('height', 'N/A')
+                filesize = f.get('filesize', 'N/A')
+                print(f"  ID: {format_id}, Ext: {ext}, Height: {height}, Size: {filesize}")
+            print("=" * 50)
+            # =====================================
+            
+            title = info.get('title', 'video')[:50]
+            thumbnail = info.get('thumbnail', None)
+            duration = info.get('duration', 0)
+            
+            ydl.download([url])
             
             downloaded_file = None
             for file in os.listdir(DOWNLOAD_DIR):
