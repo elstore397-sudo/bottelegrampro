@@ -59,8 +59,11 @@ async def download_media(url: str, platform: str) -> dict:
         }
     }
     
+    # ===== FORMAT YANG PALING FLEKSIBEL =====
     if platform == "youtube":
-        ydl_opts['format'] = '22/18/best'
+        # Download format terbaik yang tersedia, lalu konversi ke mp4
+        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+        ydl_opts['merge_output_format'] = 'mp4'  # Gabungkan jadi mp4
     else:
         ydl_opts['format'] = 'best'
     
@@ -83,8 +86,10 @@ async def download_media(url: str, platform: str) -> dict:
             thumbnail = info.get('thumbnail', None)
             duration = info.get('duration', 0)
             
+            # Download (akan otomatis di-merge ke mp4)
             ydl.download([url])
             
+            # Cari file hasil download
             downloaded_file = None
             for file in os.listdir(DOWNLOAD_DIR):
                 if file.endswith(('.mp4', '.webm', '.mkv', '.mp3')):
@@ -111,7 +116,7 @@ async def download_media(url: str, platform: str) -> dict:
         return {
             'success': False,
             'error': str(e)
-        }
+                }
 
 # ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
