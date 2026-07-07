@@ -27,6 +27,9 @@ def load_allowed_users():
 def is_allowed(update: Update) -> bool:
     return update.effective_user.id in load_allowed_users()
 
+# ===== OWNER CONFIG =====
+OWNER_CHAT_ID = 6096236749  # Ganti dengan chat_id kamu!
+
 # ===== DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
     patterns = {
@@ -57,7 +60,7 @@ async def download_media(url: str, platform: str) -> dict:
     }
     
     if platform == "youtube":
-        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+        ydl_opts['format'] = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
     else:
         ydl_opts['format'] = 'best'
     
@@ -97,7 +100,7 @@ async def download_media(url: str, platform: str) -> dict:
             'success': False,
             'error': str(e)
         }
-        
+
 # ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
@@ -133,8 +136,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Proses dibatalkan. Kirim link baru kapan saja!")
 
 # ===== MANAJEMEN USER (Hanya Owner) =====
-OWNER_CHAT_ID = 6096236749  # Ganti dengan chat_id kamu!
-
 async def add_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_CHAT_ID:
         await update.message.reply_text("⛔ Hanya owner yang bisa menambah user.")
@@ -203,6 +204,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
         return
     
+    # Simpan ke cache dengan ID unik
     file_id = int(time.time() * 1000) + random.randint(1, 999)
     downloads_cache[file_id] = {
         'file_path': result['file_path'],
@@ -253,15 +255,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = file_data['url']
     is_audio = data.startswith("aud_")
     
+    # Cek apakah file video masih ada
+    if not os.path.exists(file_path):
+        await query.edit_message_text("❌ File video tidak ditemukan. Silakan kirim ulang link.")
+        downloads_cache.pop(file_id, None)
+        return
+    
     await query.edit_message_text(f"📤 Mengirim {'audio' if is_audio else 'video'}...")
     
     try:
         if is_audio:
-            if not os.path.exists(file_path):
-                await query.edit_message_text("❌ File video tidak ditemukan.")
-                downloads_cache.pop(file_id, None)
-                return
-            
+            # ==== KONVERSI AUDIO ====
             audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
             
             if os.path.exists(audio_path):
@@ -269,8 +273,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             ydl_opts_audio = {
                 'outtmpl': audio_path,
-                'quiet': False,
-                'no_warnings': False,
+                'quiet': True,
+                'no_warnings': True,
                 'format': 'bestaudio/best',
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
@@ -283,13 +287,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
                 ydl.download([url])
             
+            # Cari file audio yang dihasilkan
             if not os.path.exists(audio_path):
                 mp3_files = [f for f in os.listdir(DOWNLOAD_DIR) if f.endswith('.mp3')]
                 if mp3_files:
                     mp3_files.sort(key=lambda x: os.path.getctime(os.path.join(DOWNLOAD_DIR, x)), reverse=True)
                     audio_path = os.path.join(DOWNLOAD_DIR, mp3_files[0])
                 else:
-                    await query.edit_message_text("❌ Gagal mengkonversi audio.")
+                    await query.edit_message_text("❌ Gagal mengkonversi audio. File MP3 tidak ditemukan.")
                     return
             
             with open(audio_path, 'rb') as f:
@@ -297,11 +302,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.remove(audio_path)
             
         else:
-            if not os.path.exists(file_path):
-                await query.edit_message_text("❌ File video tidak ditemukan.")
-                downloads_cache.pop(file_id, None)
-                return
-            
+            # ==== KIRIM VIDEO ====
             with open(file_path, 'rb') as f:
                 await query.message.reply_video(video=f, caption="🎬 Video selesai!")
             os.remove(file_path)
