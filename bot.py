@@ -56,10 +56,11 @@ async def download_media(url: str, platform: str) -> dict:
         }
     }
     
-    if platform == "youtube":
-        ydl_opts['format'] = 'best[height<=720]/best'
-    else:
-        ydl_opts['format'] = 'best'
+    # Untuk YouTube, coba format terbaik yang tersedia
+if platform == "youtube":
+    ydl_opts['format'] = 'bestvideo+bestaudio/best'
+else:
+    ydl_opts['format'] = 'best'
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
