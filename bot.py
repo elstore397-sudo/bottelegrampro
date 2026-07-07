@@ -56,11 +56,10 @@ async def download_media(url: str, platform: str) -> dict:
         }
     }
     
-    # Untuk YouTube, coba format terbaik yang tersedia
-if platform == "youtube":
-    ydl_opts['format'] = 'bestvideo+bestaudio/best'
-else:
-    ydl_opts['format'] = 'best'
+    if platform == "youtube":
+        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+    else:
+        ydl_opts['format'] = 'best'
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -98,7 +97,7 @@ else:
             'success': False,
             'error': str(e)
         }
-
+        
 # ===== HANDLER PERINTAH =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
