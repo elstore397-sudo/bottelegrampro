@@ -33,7 +33,6 @@ OWNER_CHAT_ID = 6096236749  # Ganti dengan chat_id kamu!
 # ===== DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
     patterns = {
-        "youtube": r"(youtube\.com|youtu\.be)",
         "tiktok": r"(tiktok\.com)",
         "instagram": r"(instagram\.com|instagr\.am)",
         "facebook": r"(facebook\.com|fb\.watch|fb\.com)",
@@ -48,7 +47,6 @@ def detect_platform(url: str) -> str:
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     
-    # Opsi dasar untuk semua platform
     ydl_opts = {
         'outtmpl': output_template,
         'quiet': True,
@@ -60,31 +58,18 @@ async def download_media(url: str, platform: str) -> dict:
         }
     }
     
-    # ===== STRATEGI KHUSUS UNTUK YOUTUBE =====
-    if platform == "youtube":
-        # 1. Gunakan format 'best' yang paling sederhana
-        ydl_opts['format'] = 'best'
-        # 2. Skip format DASH dan HLS yang sering bermasalah
-        ydl_opts['extractor_args'] = {
-            'youtube': {
-                'skip': ['hls', 'dash']
-            }
-        }
-    else:
-        ydl_opts['format'] = 'best'
+    # Format terbaik untuk semua platform (tanpa YouTube)
+    ydl_opts['format'] = 'best'
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info dulu untuk dapat judul
             info = ydl.extract_info(url, download=False)
             title = info.get('title', 'video')[:50]
             thumbnail = info.get('thumbnail', None)
             duration = info.get('duration', 0)
             
-            # Lakukan download
             ydl.download([url])
             
-            # Cari file hasil download
             downloaded_file = None
             for file in os.listdir(DOWNLOAD_DIR):
                 if file.endswith(('.mp4', '.webm', '.mkv', '.mp3')):
@@ -120,7 +105,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     await update.message.reply_text(
-        "🎬 Halo! Kirim link YouTube/TikTok/IG/FB/Threads untuk aku downloadkan.\n\n"
+        "🎬 Halo! Kirim link TikTok/IG/FB/Threads untuk aku downloadkan.\n\n"
         "Gunakan /cancel untuk membatalkan proses."
     )
 
@@ -205,7 +190,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     platform = detect_platform(url)
     if platform == "unknown":
-        await update.message.reply_text("❌ Platform tidak didukung!")
+        await update.message.reply_text("❌ Platform tidak didukung!\n\n✅ Support: TikTok, Instagram, Facebook, Threads")
         return
     
     status_msg = await update.message.reply_text(f"📥 Memproses link dari {platform.upper()}...")
