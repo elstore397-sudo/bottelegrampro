@@ -321,6 +321,92 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"❌ Gagal: {result.get('error', 'Unknown error')[:200]}")
 
+# ===== HANDLER TOMBOL =====
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        await update.message.reply_text("⛔ Akses ditolak.")
+        return
+    
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    if not data.startswith(("vid_", "aud_")):
+        await query.edit_message_text("❌ Tombol tidak dikenali.")
+        return
+    
+    try:
+        file_id = int(data.split("_")[1])
+    except (IndexError, ValueError):
+        await query.edit_message_text("❌ ID tidak valid.")
+        return
+    
+    file_data = downloads_cache.get(file_id)
+    if not file_data:
+        await query.edit_message_text("❌ Data tidak tersedia atau sudah kadaluarsa.")
+        return
+    
+    file_path = file_data['file_path']
+    url = file_data['url']
+    is_audio = data.startswith("aud_")
+    
+    # Cek apakah file video masih ada
+    if not os.path.exists(file_path):
+        await query.edit_message_text("❌ File video tidak ditemukan. Silakan kirim ulang link.")
+        downloads_cache.pop(file_id, None)
+        return
+    
+    await query.edit_message_text(f"📤 Mengirim {'audio' if is_audio else 'video'}...")
+    
+    try:
+        if is_audio:
+            # ==== KONVERSI AUDIO ====
+            audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
+            
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            
+            ydl_opts_audio = {
+                'outtmpl': audio_path,
+                'quiet': True,
+                'no_warnings': True,
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'cookiefile': 'cookies.txt'
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+                ydl.download([url])
+            
+            # Cari file audio yang dihasilkan
+            if not os.path.exists(audio_path):
+                mp3_files = [f for f in os.listdir(DOWNLOAD_DIR) if f.endswith('.mp3')]
+                if mp3_files:
+                    mp3_files.sort(key=lambda x: os.path.getctime(os.path.join(DOWNLOAD_DIR, x)), reverse=True)
+                    audio_path = os.path.join(DOWNLOAD_DIR, mp3_files[0])
+                else:
+                    await query.edit_message_text("❌ Gagal mengkonversi audio. File MP3 tidak ditemukan.")
+                    return
+            
+            with open(audio_path, 'rb') as f:
+                await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
+            os.remove(audio_path)
+            
+        else:
+            # ==== KIRIM VIDEO ====
+            with open(file_path, 'rb') as f:
+                await query.message.reply_video(video=f, caption="🎬 Video selesai!")
+            os.remove(file_path)
+        
+        downloads_cache.pop(file_id, None)
+        
+    except Exception as e:
+        await query.edit_message_text(f"❌ Gagal mengirim file: {str(e)[:100]}")
+
 # ===== MAIN =====
 def main():
     if not BOT_TOKEN:
