@@ -54,11 +54,11 @@ def detect_platform(url: str) -> str:
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     
-    # ===== NORMALISASI URL UNTUK THREADS =====
+    # ===== NORMALISASI URL =====
     if "threads.com" in url:
         url = url.replace("threads.com", "threads.net")
-        print(f"🔁 URL dinormalisasi menjadi: {url}")  # DEBUG
-    # =========================================
+        print(f"🔁 URL dinormalisasi: {url}")
+    # ===========================
     
     ydl_opts = {
         'outtmpl': output_template,
@@ -68,7 +68,8 @@ async def download_media(url: str, platform: str) -> dict:
         'cookiefile': 'cookies.txt',
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+        },
+        'allow_unplayable_formats': True,  # <-- TAMBAHKAN INI
     }
     
     # Format terbaik untuk semua platform
@@ -76,10 +77,22 @@ async def download_media(url: str, platform: str) -> dict:
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # ===== NORMALISASI SEBELUM EXTRACT =====
+            if "threads.com" in url:
+                url = url.replace("threads.com", "threads.net")
+                print(f"🔁 URL dinormalisasi (extract): {url}")
+            # =======================================
+            
             info = ydl.extract_info(url, download=False)
             title = info.get('title', 'video')[:50]
             thumbnail = info.get('thumbnail', None)
             duration = info.get('duration', 0)
+            
+            # ===== NORMALISASI SEBELUM DOWNLOAD =====
+            if "threads.com" in url:
+                url = url.replace("threads.com", "threads.net")
+                print(f"🔁 URL dinormalisasi (download): {url}")
+            # ========================================
             
             ydl.download([url])
             
