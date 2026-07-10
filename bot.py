@@ -36,7 +36,7 @@ def detect_platform(url: str) -> str:
         "tiktok": r"(tiktok\.com)",
         "instagram": r"(instagram\.com|instagr\.am)",
         "facebook": r"(facebook\.com|fb\.watch|fb\.com)",
-        "threads": r"(threads\.net)"
+        "threads": r"(threads\.net|threads\.com)"
     }
     for platform, pattern in patterns.items():
         if re.search(pattern, url, re.IGNORECASE):
