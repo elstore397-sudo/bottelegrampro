@@ -183,6 +183,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     url = update.message.text.strip()
+    url = normalize_threads_url(url)
     
     if not re.match(r'https?://', url):
         await update.message.reply_text("❌ Kirimkan link URL yang valid!")
