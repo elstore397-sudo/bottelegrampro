@@ -2,6 +2,8 @@ import os
 import re
 import time
 import random
+import aiohttp
+import json
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -40,7 +42,7 @@ def normalize_threads_url(url: str) -> str:
 # ===== DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
     patterns = {
-        "tiktok": r"(tiktok\.com)",
+        "tiktok": r"(tiktok\.com|vt\.tiktok\.com)",
         "instagram": r"(instagram\.com|instagr\.am)",
         "facebook": r"(facebook\.com|fb\.watch|fb\.com)",
         "threads": r"(threads\.net|threads\.com)"
@@ -50,7 +52,54 @@ def detect_platform(url: str) -> str:
             return platform
     return "unknown"
 
-# ===== FUNGSI DOWNLOAD =====
+# ===== DOWNLOAD VIA RAPIDAPI (UNTUK THREADS) =====
+async def download_threads_api(url: str) -> dict:
+    """Download Threads video menggunakan RapidAPI"""
+    # GANTI DENGAN API KEY MILIKMU!
+    api_key = "233e440316msh993396c5a50a82cp14dc97jsn2b9cb5f137f1"
+    api_host = "threads-video-image-downloader11.p.rapidapi.com"
+    api_url = "https://threads-video-image-downloader11.p.rapidapi.com/threads.php"
+    
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "x-rapidapi-host": api_host,
+        "x-rapidapi-key": api_key
+    }
+    data = {"url": url}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, headers=headers, data=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    # Sesuaikan dengan struktur respons API
+                    video_url = result.get('video_url') or result.get('download_url') or result.get('url')
+                    title = result.get('title', 'Threads Video')
+                    
+                    if video_url:
+                        return {
+                            'success': True,
+                            'file_path': video_url,  # URL video
+                            'title': title,
+                            'platform': 'threads'
+                        }
+                    else:
+                        return {
+                            'success': False,
+                            'error': 'Tidak ada URL video ditemukan dalam respons API'
+                        }
+                else:
+                    return {
+                        'success': False,
+                        'error': f'API Error: {response.status} - {await response.text()}'
+                    }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+# ===== FUNGSI DOWNLOAD (yt-dlp) =====
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     
@@ -66,10 +115,12 @@ async def download_media(url: str, platform: str) -> dict:
         'no_warnings': True,
         'extract_flat': False,
         'cookiefile': 'cookies.txt',
+        'allow_unplayable_formats': True,
+        'ignoreerrors': True,
+        'no_check_certificate': True,
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
-        'allow_unplayable_formats': True,  # <-- TAMBAHKAN INI
+        }
     }
     
     # Format terbaik untuk semua platform
@@ -222,119 +273,53 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     status_msg = await update.message.reply_text(f"📥 Memproses link dari {platform.upper()}...")
     
-    result = await download_media(url, platform)
+    # ===== PILIH METODE DOWNLOAD =====
+    if platform == "threads":
+        result = await download_threads_api(url)
+    else:
+        result = await download_media(url, platform)
+    # ================================
     
     if not result['success']:
-        await status_msg.edit_text(f"❌ Gagal: {result['error'][:200]}")
+        await status_msg.edit_text(f"❌ Gagal: {result.get('error', 'Unknown error')[:200]}")
         return
-    
-    # Simpan ke cache dengan ID unik
-    file_id = int(time.time() * 1000) + random.randint(1, 999)
-    downloads_cache[file_id] = {
-        'file_path': result['file_path'],
-        'url': url,
-        'title': result['title'],
-        'platform': platform
-    }
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("🎬 Video (MP4)", callback_data=f"vid_{file_id}"),
-            InlineKeyboardButton("🎵 Audio (MP3)", callback_data=f"aud_{file_id}")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    info_text = f"✅ Selesai!\n📌 {result['title']}\n📱 {platform.upper()}\n\nPilih format yang diinginkan:"
     
     await status_msg.delete()
-    await update.message.reply_text(info_text, reply_markup=reply_markup)
-
-# ===== HANDLER TOMBOL =====
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_allowed(update):
-        await update.message.reply_text("⛔ Akses ditolak.")
-        return
     
-    query = update.callback_query
-    await query.answer()
-    
-    data = query.data
-    if not data.startswith(("vid_", "aud_")):
-        await query.edit_message_text("❌ Tombol tidak dikenali.")
-        return
-    
-    try:
-        file_id = int(data.split("_")[1])
-    except (IndexError, ValueError):
-        await query.edit_message_text("❌ ID tidak valid.")
-        return
-    
-    file_data = downloads_cache.get(file_id)
-    if not file_data:
-        await query.edit_message_text("❌ Data tidak tersedia atau sudah kadaluarsa.")
-        return
-    
-    file_path = file_data['file_path']
-    url = file_data['url']
-    is_audio = data.startswith("aud_")
-    
-    # Cek apakah file video masih ada
-    if not os.path.exists(file_path):
-        await query.edit_message_text("❌ File video tidak ditemukan. Silakan kirim ulang link.")
-        downloads_cache.pop(file_id, None)
-        return
-    
-    await query.edit_message_text(f"📤 Mengirim {'audio' if is_audio else 'video'}...")
-    
-    try:
-        if is_audio:
-            # ==== KONVERSI AUDIO ====
-            audio_path = file_path.rsplit('.', 1)[0] + ".mp3"
-            
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
-            
-            ydl_opts_audio = {
-                'outtmpl': audio_path,
-                'quiet': True,
-                'no_warnings': True,
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-                'cookiefile': 'cookies.txt'
-            }
-            
-            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
-                ydl.download([url])
-            
-            # Cari file audio yang dihasilkan
-            if not os.path.exists(audio_path):
-                mp3_files = [f for f in os.listdir(DOWNLOAD_DIR) if f.endswith('.mp3')]
-                if mp3_files:
-                    mp3_files.sort(key=lambda x: os.path.getctime(os.path.join(DOWNLOAD_DIR, x)), reverse=True)
-                    audio_path = os.path.join(DOWNLOAD_DIR, mp3_files[0])
-                else:
-                    await query.edit_message_text("❌ Gagal mengkonversi audio. File MP3 tidak ditemukan.")
-                    return
-            
-            with open(audio_path, 'rb') as f:
-                await query.message.reply_audio(audio=f, caption="🎵 Audio selesai!")
-            os.remove(audio_path)
-            
+    # ===== KIRIM FILE =====
+    if result['success']:
+        file_path_or_url = result['file_path']
+        
+        # Jika hasil dari API (URL), download dulu
+        if platform == "threads" and file_path_or_url.startswith('http'):
+            try:
+                await update.message.reply_text(f"✅ Selesai! Mengirim file: {result['title']}")
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(file_path_or_url) as resp:
+                        if resp.status == 200:
+                            temp_path = os.path.join(DOWNLOAD_DIR, f"threads_{int(time.time())}.mp4")
+                            with open(temp_path, 'wb') as f:
+                                f.write(await resp.read())
+                            
+                            with open(temp_path, 'rb') as f:
+                                await update.message.reply_video(video=f, caption=f"📥 {result['title']}\n📱 Threads")
+                            os.remove(temp_path)
+                        else:
+                            await update.message.reply_text(f"❌ Gagal mengunduh file (HTTP {resp.status})")
+            except Exception as e:
+                await update.message.reply_text(f"❌ Gagal memproses file: {str(e)[:100]}")
         else:
-            # ==== KIRIM VIDEO ====
-            with open(file_path, 'rb') as f:
-                await query.message.reply_video(video=f, caption="🎬 Video selesai!")
-            os.remove(file_path)
-        
-        downloads_cache.pop(file_id, None)
-        
-    except Exception as e:
-        await query.edit_message_text(f"❌ Gagal mengirim file: {str(e)[:100]}")
+            # Untuk platform lain (TikTok, IG, FB) yang pakai yt-dlp
+            if os.path.exists(file_path_or_url):
+                await update.message.reply_text(f"✅ Selesai! Mengirim file: {result['title']}")
+                with open(file_path_or_url, 'rb') as f:
+                    await update.message.reply_video(video=f, caption=f"📥 {result['title']}\n📱 {platform.upper()}")
+                os.remove(file_path_or_url)
+            else:
+                await update.message.reply_text("❌ File tidak ditemukan.")
+    else:
+        await update.message.reply_text(f"❌ Gagal: {result.get('error', 'Unknown error')[:200]}")
 
 # ===== MAIN =====
 def main():
