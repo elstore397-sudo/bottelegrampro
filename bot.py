@@ -30,6 +30,13 @@ def is_allowed(update: Update) -> bool:
 # ===== OWNER CONFIG =====
 OWNER_CHAT_ID = 6096236749  # Ganti dengan chat_id kamu!
 
+# ===== NORMALISASI URL THREADS =====
+def normalize_threads_url(url: str) -> str:
+    """Ubah threads.com menjadi threads.net agar yt-dlp bisa memproses"""
+    if "threads.com" in url:
+        return url.replace("threads.com", "threads.net")
+    return url
+
 # ===== DETEKSI PLATFORM =====
 def detect_platform(url: str) -> str:
     patterns = {
