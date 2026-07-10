@@ -54,19 +54,24 @@ def detect_platform(url: str) -> str:
 async def download_media(url: str, platform: str) -> dict:
     output_template = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
     
+    # ===== NORMALISASI URL UNTUK THREADS =====
+    if "threads.com" in url:
+        url = url.replace("threads.com", "threads.net")
+        print(f"🔁 URL dinormalisasi menjadi: {url}")  # DEBUG
+    # =========================================
+    
     ydl_opts = {
         'outtmpl': output_template,
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
         'cookiefile': 'cookies.txt',
-        'allow_unplayable_formats': True,
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
     }
     
-    # Format terbaik untuk semua platform (tanpa YouTube)
+    # Format terbaik untuk semua platform
     ydl_opts['format'] = 'best'
     
     try:
